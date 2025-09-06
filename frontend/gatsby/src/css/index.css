@@ -1,0 +1,19 @@
+:root {
+  --primary: #000000;
+  --secondary: #ffffff;
+  --accent: #ff5e5b;
+  --shadow: 8px 8px 0px var(--primary);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Courier New", monospace;
+}
+
+body {
+  background-color: var(--secondary);
+  align-items: center;
+  min-height: 100vh;
+}
