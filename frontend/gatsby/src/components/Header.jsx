@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useContext } from "react";
 import * as styles from "../css/notes.module.css";
+import { AuthContext } from "../context/AuthContext";
 function Header() {
+  const { logout } = useContext(AuthContext);
   return (
     <header className={styles.header}>
-      <h1 >
+      <h1>
         <svg
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
@@ -22,12 +24,7 @@ function Header() {
         Notes
       </h1>
 
-      <button
-        type="button"
-        onClick={() => {
-          /* handle logout logic here */
-        }}
-      >
+      <button type="button" onClick={logout} className="btn btn-outline-light">
         Log out
       </button>
     </header>
