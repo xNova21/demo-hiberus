@@ -1,7 +1,7 @@
 import {repository} from '@loopback/repository';
 import {
   post,
-  param,
+  get,
   getModelSchemaRef,
   del,
   requestBody,
@@ -9,7 +9,6 @@ import {
 } from '@loopback/rest';
 import {User} from '../models';
 import {NoteRepository, UserRepository} from '../repositories';
-import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import {HttpErrors} from '@loopback/rest';
 import {
@@ -33,13 +32,22 @@ export class UserController {
     @repository(UserRepository) protected userRepository: UserRepository,
     @repository(NoteRepository)
     public noteRepository: NoteRepository,
-     
   ) {}
 
   @post('/users/register')
   @response(200, {
     description: 'User created',
-    content: {'application/json': {schema: getModelSchemaRef(User)}},
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: {
+            token: {type: 'string'},
+            user: getModelSchemaRef(User),
+          },
+        },
+      },
+    },
   })
   async create(
     @requestBody({
@@ -53,7 +61,7 @@ export class UserController {
       },
     })
     user: Omit<User, 'id'>,
-  ): Promise<User> {
+  ): Promise<{token: string; user: User}> {
     try {
       user.password = await bcrypt.hash(
         user.password,
@@ -67,9 +75,28 @@ export class UserController {
         },
       });
       if (existingUser) {
+        console.log('User already exists:', existingUser);
         throw new HttpErrors.BadRequest('Username or email already exists');
       }
-      return await this.userRepository.create(user);
+      const createdUser = await this.userRepository.create(user);
+
+      // Construir el perfil de usuario para el token (LoopBack espera securityId)
+      const userProfile: UserProfile = {
+        [securityId]: createdUser.id?.toString() ?? '',
+        id: createdUser.id?.toString() ?? '',
+        name: createdUser.username,
+        email: createdUser.email,
+      };
+      const token = await this.jwtService.generateToken(userProfile);
+
+      return {
+        token,
+        user: {
+          id: createdUser.id,
+          username: createdUser.username,
+          email: createdUser.email,
+        } as User,
+      };
     } catch (err) {
       console.error('Error al crear usuario:', err);
       throw err;
@@ -140,6 +167,36 @@ export class UserController {
   }
 
   @authenticate('jwt')
+  @get('/users/me')
+  @response(200, {
+    description: 'The current user profile',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: {
+            id: {type: 'number'},
+            username: {type: 'string'},
+            email: {type: 'string'},
+          },
+        },
+      },
+    },
+  })
+  async me(): Promise<{id: number; username: string; email: string}> {
+    if (!this.userProfile?.id) {
+      throw new HttpErrors.Unauthorized('User profile or user ID is missing');
+    }
+    const userId = parseInt(this.userProfile.id);
+    const user = await this.userRepository.findById(userId);
+    return {
+      id: user.id!,
+      username: user.username,
+      email: user.email,
+    };
+  }
+
+  @authenticate('jwt')
   @del('/users')
   @response(200, {
     description: 'User DELETE success',
@@ -154,14 +211,13 @@ export class UserController {
       },
     },
   })
-    
   async deleteById(): Promise<{message: string}> {
-    if (!this.userProfile || !this.userProfile.id) {
+    if (!this.userProfile?.id) {
       throw new HttpErrors.Unauthorized('User profile or user ID is missing');
     }
     const userId = parseInt(this.userProfile.id);
     await this.userRepository.deleteById(userId);
     await this.noteRepository.deleteAll({userId});
-    return {message: 'User deleted successfully'};    
+    return {message: 'User deleted successfully'};
   }
 }

@@ -21,7 +21,10 @@ describe('Complete flow ', () => {
       password: 'pass1234',
     };
     const res = await client.post('/users/register').send(user).expect(200);
-    expect(res.body).to.containDeep({email: user.email});
+    expect(res.body).to.containDeep({
+      token: res.body.token,
+      user: {id: res.body.user.id, username: user.username, email: user.email},
+    });
   });
 
   it('logs in a user with email', async () => {
@@ -40,20 +43,31 @@ describe('Complete flow ', () => {
     expect(res.body).to.containDeep({token: res.body.token});
   });
     it('logs in a user with username', async () => {
-    const user = {
-      username: 'testuser',
-      email: 'test@example.com',
-      password: 'pass1234',
-    };
-    const res = await client
-      .post('/users/login')
-      .send({
+      const user = {
+        username: 'testuser',
+        email: 'test@example.com',
+        password: 'pass1234',
+      };
+      const res = await client
+        .post('/users/login')
+        .send({
+          username: user.username,
+          password: user.password,
+        })
+        .expect(200);
+      expect(res.body).to.containDeep({token: res.body.token});
+
+      // testea el login en /users/me con un get y el token
+      const meRes = await client
+        .get('/users/me')
+        .set('Authorization', `Bearer ${res.body.token}`)
+        .expect(200);
+      expect(meRes.body).to.containDeep({
+        id: meRes.body.id,
         username: user.username,
-        password: user.password,
-      })
-      .expect(200);
-    expect(res.body).to.containDeep({token: res.body.token});
-  });
+        email: user.email,
+      });
+    });
 
 
   it('creates a note for the user', async () => {
